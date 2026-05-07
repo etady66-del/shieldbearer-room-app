@@ -11,11 +11,13 @@ import {
 } from "firebase/firestore";
 
 /*
-  STEP 1: Create a Firebase project at https://console.firebase.google.com
-  STEP 2: Create a Firestore Database
-  STEP 3: Replace the firebaseConfig below with your own Firebase web app config
-  STEP 4: Run: npm install firebase
-  STEP 5: Run: npm run dev
+  Logo setup:
+  1. Create a folder named public in your project if it does not already exist.
+  2. Save the Shield Bearer logo image as: public/shieldbearer-logo.png
+  3. The app will display it automatically.
+
+  Firebase setup:
+  Replace the firebaseConfig below with your own Firebase web app config.
 */
 
 const firebaseConfig = {
@@ -54,8 +56,25 @@ const DEFAULT_THERAPISTS = [
     "Katelynn Lincoln"
 ];
 
+const COLORS = [
+    "#e8f5d9",
+    "#eee1ff",
+    "#dbeeff",
+    "#fff1bd",
+    "#ffddea",
+    "#e3e9ff",
+    "#dff7ef",
+    "#fde2d2",
+];
+
 function makeSafeId(text) {
     return text.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
+function therapistColor(name) {
+    let total = 0;
+    for (let i = 0; i < name.length; i++) total += name.charCodeAt(i);
+    return COLORS[total % COLORS.length];
 }
 
 export default function App() {
@@ -70,12 +89,14 @@ export default function App() {
     const [viewMode, setViewMode] = useState("therapist");
     const [adminPassword, setAdminPassword] = useState("");
     const [isAdmin, setIsAdmin] = useState(false);
+    const [roomFilter, setRoomFilter] = useState("all");
 
     // Simple temporary password. Change this to whatever you want.
     // For stronger security later, use Firebase Authentication instead.
     const ADMIN_PASSWORD = "shieldbearer123";
 
     const dateAssignments = assignments[selectedDate] || {};
+    const visibleRooms = roomFilter === "all" ? rooms : rooms.filter((room) => room === roomFilter);
     const bookedCount = useMemo(() => Object.keys(dateAssignments).length, [dateAssignments]);
     const totalSlots = rooms.length * TIME_SLOTS.length;
 
@@ -143,11 +164,6 @@ export default function App() {
         return `${makeSafeId(room)}__${makeSafeId(time)}`;
     }
 
-    function readableSlot(documentId) {
-        const match = Object.entries(dateAssignments).find(([key]) => key === documentId);
-        return match ? match[0] : documentId;
-    }
-
     function therapistAlreadyBooked(time, therapist) {
         return Object.entries(dateAssignments).some(([key, value]) => {
             const expectedTimePart = makeSafeId(time);
@@ -157,7 +173,7 @@ export default function App() {
 
     async function assignRoom(room, time) {
         if (!isAdmin) {
-            setMessage("Switch to Admin View to edit the schedule.");
+            setMessage("Enter the admin password to edit the schedule.");
             return;
         }
 
@@ -185,7 +201,7 @@ export default function App() {
 
     async function clearSlot(room, time) {
         if (!isAdmin) {
-            setMessage("Switch to Admin View to edit the schedule.");
+            setMessage("Enter the admin password to edit the schedule.");
             return;
         }
 
@@ -204,9 +220,34 @@ export default function App() {
         setMessage(`${name} added to the shared therapist list.`);
     }
 
+    async function removeTherapist() {
+        if (!isAdmin) {
+            setMessage("Enter the admin password to remove therapists.");
+            return;
+        }
+
+        if (!selectedTherapist) {
+            setMessage("Please select a therapist to remove.");
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Remove ${selectedTherapist} from the therapist list? Existing room assignments will not be deleted.`
+        );
+
+        if (!confirmed) return;
+
+        await deleteDoc(doc(db, "therapists", makeSafeId(selectedTherapist)));
+
+        const remainingTherapists = therapists.filter((name) => name !== selectedTherapist);
+        const removedName = selectedTherapist;
+        setSelectedTherapist(remainingTherapists[0] || "");
+        setMessage(`${removedName} removed from the shared therapist list.`);
+    }
+
     async function addRoom() {
         if (!isAdmin) {
-            setMessage("Switch to Admin View to add rooms.");
+            setMessage("Enter the admin password to add rooms.");
             return;
         }
 
@@ -227,35 +268,14 @@ export default function App() {
         setMessage(`${roomName} added to the room list.`);
     }
 
-    async function removeTherapist() {
-        if (!isAdmin) {
-            setMessage("Switch to Admin View to remove therapists.");
-            return;
-        }
-
-        if (!selectedTherapist) {
-            setMessage("Please select a therapist to remove.");
-            return;
-        }
-
-        const confirmed = window.confirm(
-            `Remove ${selectedTherapist} from the therapist list? Existing room assignments will not be deleted.`
-        );
-
-        if (!confirmed) return;
-
-        await deleteDoc(doc(db, "therapists", makeSafeId(selectedTherapist)));
-
-        const remainingTherapists = therapists.filter((name) => name !== selectedTherapist);
-        setSelectedTherapist(remainingTherapists[0] || "");
-        setMessage(`${selectedTherapist} removed from the shared therapist list.`);
-    }
-
     async function clearDay() {
         if (!isAdmin) {
-            setMessage("Switch to Admin View to edit the schedule.");
+            setMessage("Enter the admin password to edit the schedule.");
             return;
         }
+
+        const confirmed = window.confirm("Clear all room assignments for this date?");
+        if (!confirmed) return;
 
         const snapshot = await getDocs(collection(db, "roomAssignments", selectedDate, "slots"));
         const deletes = snapshot.docs.map((document) => deleteDoc(document.ref));
@@ -292,47 +312,210 @@ export default function App() {
     }
 
     const styles = {
-        page: { minHeight: "100vh", background: "#f4f6f8", padding: 24, fontFamily: "Arial, sans-serif" },
-        container: { maxWidth: 1300, margin: "0 auto" },
-        header: { display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end", flexWrap: "wrap" },
-        title: { margin: 0, fontSize: 30, color: "#111827" },
-        subtitle: { color: "#4b5563", marginTop: 8 },
-        card: { background: "white", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginTop: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" },
-        controls: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 },
-        label: { display: "block", fontSize: 14, fontWeight: 700, marginBottom: 6, color: "#374151" },
-        input: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "1px solid #d1d5db", fontSize: 14 },
-        button: { padding: "10px 12px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", cursor: "pointer", fontWeight: 700 },
-        primaryButton: { padding: "10px 12px", borderRadius: 10, border: "none", background: "#2563eb", color: "white", cursor: "pointer", fontWeight: 700 },
-        dangerButton: { padding: "10px 12px", borderRadius: 10, border: "none", background: "#dc2626", color: "white", cursor: "pointer", fontWeight: 700, width: "100%" },
-        tableWrap: { overflowX: "auto", marginTop: 16, background: "white", borderRadius: 16, border: "1px solid #e5e7eb" },
-        table: { width: "100%", minWidth: 1100, borderCollapse: "collapse" },
-        th: { background: "#eef2f7", padding: 12, textAlign: "left", borderBottom: "1px solid #d1d5db" },
-        td: { padding: 8, borderBottom: "1px solid #e5e7eb", verticalAlign: "top" },
-        timeCell: { padding: 12, borderBottom: "1px solid #e5e7eb", fontWeight: 700, background: "white" },
-        assignment: { background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 },
-        small: { fontSize: 12, color: "#6b7280" },
-        note: { fontSize: 12, color: "#6b7280", marginTop: 12 },
+        page: {
+            minHeight: "100vh",
+            background: "linear-gradient(180deg, #fbf9ff 0%, #ffffff 45%, #f7f4fb 100%)",
+            padding: 24,
+            fontFamily: "Inter, Arial, sans-serif",
+            color: "#171321",
+        },
+        header: {
+            display: "grid",
+            gridTemplateColumns: "280px 1fr 230px",
+            gap: 24,
+            alignItems: "center",
+            maxWidth: 1600,
+            margin: "0 auto 24px auto",
+        },
+        logo: { width: 260, maxWidth: "100%", objectFit: "contain" },
+        titleArea: { textAlign: "center" },
+        title: { margin: 0, color: "#4b136c", fontSize: 38, letterSpacing: 1, fontWeight: 900 },
+        subtitle: { margin: "12px 0 0 0", color: "#5b5f71", fontSize: 18, fontWeight: 600 },
+        adminBox: {
+            background: "#ffffff",
+            border: "1px solid #e5dff0",
+            borderRadius: 12,
+            padding: 14,
+            boxShadow: "0 8px 22px rgba(75, 19, 108, 0.08)",
+        },
+        adminStatus: { display: "flex", alignItems: "center", gap: 8, color: isAdmin ? "#15803d" : "#6b7280", fontWeight: 900 },
+        adminSmall: { fontSize: 12, marginTop: 6, color: "#111827" },
+        shell: { maxWidth: 1600, margin: "0 auto" },
+        card: {
+            background: "rgba(255,255,255,0.92)",
+            border: "1px solid #e7e0ef",
+            borderRadius: 12,
+            padding: 18,
+            boxShadow: "0 8px 22px rgba(75, 19, 108, 0.07)",
+            marginBottom: 18,
+        },
+        controls: { display: "grid", gridTemplateColumns: "repeat(5, minmax(190px, 1fr))", gap: 18, alignItems: "end" },
+        label: { display: "block", fontSize: 13, fontWeight: 900, marginBottom: 8, color: "#111827" },
+        input: {
+            width: "100%",
+            boxSizing: "border-box",
+            padding: "12px 13px",
+            borderRadius: 8,
+            border: "1px solid #d8d3e3",
+            background: "#ffffff",
+            fontSize: 14,
+            outlineColor: "#6b21a8",
+        },
+        button: {
+            padding: "12px 14px",
+            borderRadius: 8,
+            border: "1px solid #d8d3e3",
+            background: "#ffffff",
+            color: "#4b136c",
+            cursor: "pointer",
+            fontWeight: 900,
+            boxShadow: "0 2px 8px rgba(75,19,108,0.06)",
+        },
+        primaryButton: {
+            padding: "12px 16px",
+            borderRadius: 8,
+            border: "none",
+            background: "linear-gradient(135deg, #6b21a8, #4b136c)",
+            color: "white",
+            cursor: "pointer",
+            fontWeight: 900,
+            boxShadow: "0 8px 16px rgba(75, 19, 108, 0.2)",
+        },
+        dangerButton: {
+            padding: "12px 16px",
+            borderRadius: 8,
+            border: "1px solid #ef4444",
+            background: "#ffffff",
+            color: "#dc2626",
+            cursor: "pointer",
+            fontWeight: 900,
+        },
+        tableWrap: {
+            overflowX: "auto",
+            background: "white",
+            borderRadius: 12,
+            border: "1px solid #e7e0ef",
+            boxShadow: "0 8px 22px rgba(75, 19, 108, 0.07)",
+        },
+        table: { width: "100%", minWidth: 1250, borderCollapse: "separate", borderSpacing: 0 },
+        th: {
+            background: "#fbfaff",
+            padding: "16px 10px",
+            textAlign: "center",
+            borderBottom: "1px solid #e7e0ef",
+            borderRight: "1px solid #f1edf7",
+            fontWeight: 900,
+            color: "#171321",
+            whiteSpace: "nowrap",
+        },
+        timeCell: {
+            padding: 14,
+            borderBottom: "1px solid #f1edf7",
+            borderRight: "1px solid #f1edf7",
+            fontWeight: 800,
+            background: "#ffffff",
+            textAlign: "center",
+            width: 105,
+            whiteSpace: "nowrap",
+        },
+        td: {
+            padding: 6,
+            borderBottom: "1px solid #f1edf7",
+            borderRight: "1px solid #f1edf7",
+            verticalAlign: "top",
+            background: "#ffffff",
+        },
+        slotButton: {
+            width: "100%",
+            minHeight: 44,
+            borderRadius: 8,
+            border: "1px solid #e5e0ec",
+            background: "linear-gradient(180deg, #ffffff, #fbfaff)",
+            color: "#5b3b7a",
+            fontSize: 22,
+            cursor: "pointer",
+        },
+        assignment: {
+            minHeight: 44,
+            borderRadius: 8,
+            padding: "8px 10px",
+            border: "1px solid rgba(75,19,108,0.12)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+            fontWeight: 900,
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.45)",
+        },
+        assignmentSmall: { fontSize: 11, color: "#4b5563", marginTop: 2, fontWeight: 700 },
+        bottomGrid: { display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: 18, marginTop: 18 },
+        sectionTitle: { color: "#4b136c", fontWeight: 900, margin: "0 0 14px 0", fontSize: 16 },
+        chipWrap: { display: "flex", gap: 8, flexWrap: "wrap" },
+        chip: { border: "1px solid #d8d3e3", background: "#fbfaff", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 13 },
+        message: { color: "#4b136c", fontWeight: 800 },
+        note: { color: "#6b7280", fontSize: 12, lineHeight: 1.5, marginTop: 14 },
     };
 
     const mySchedule = therapistSchedule();
 
     return (
         <div style={styles.page}>
-            <div style={styles.container}>
-                <div style={styles.header}>
-                    <div>
-                        <h1 style={styles.title}>Shieldbearer Counseling Room Allocator</h1>
-                        <p style={styles.subtitle}>Shared online schedule for Art Room plus Rooms 1–11, one-hour sessions, 8:00 AM to 8:00 PM.</p>
-                    </div>
-                    <div style={styles.card}>
-                        <strong>Booked Slots:</strong> {bookedCount} / {totalSlots}
-                    </div>
+            <header style={styles.header}>
+                <div>
+                    <img
+                        src="/shieldbearer-logo.png"
+                        alt="Shield Bearer logo"
+                        style={styles.logo}
+                        onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                        }}
+                    />
                 </div>
 
-                <div style={styles.card}>
+                <div style={styles.titleArea}>
+                    <h1 style={styles.title}>ROOM ASSIGNMENTS</h1>
+                    <p style={styles.subtitle}>Manage therapist room assignments by time</p>
+                </div>
+
+                <div style={styles.adminBox}>
+                    <div style={styles.adminStatus}>{isAdmin ? "🔒 Admin Mode" : "👁️ Therapist View"}</div>
+                    <div style={styles.adminSmall}>{isAdmin ? "You are logged in as admin" : "Read-only access"}</div>
+                    {isAdmin ? (
+                        <button style={{ ...styles.dangerButton, marginTop: 12, width: "100%" }} onClick={logoutAdmin}>Logout</button>
+                    ) : (
+                        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                            <input
+                                style={styles.input}
+                                type="password"
+                                placeholder="Admin password"
+                                value={adminPassword}
+                                onChange={(e) => setAdminPassword(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && loginAdmin()}
+                            />
+                            <button style={styles.primaryButton} onClick={loginAdmin}>Login</button>
+                        </div>
+                    )}
+                </div>
+            </header>
+
+            <main style={styles.shell}>
+                <section style={styles.card}>
                     <div style={styles.controls}>
                         <div>
-                            <label style={styles.label}>View Mode</label>
+                            <label style={styles.label}>Select Date</label>
+                            <input style={styles.input} type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+                        </div>
+
+                        <div>
+                            <label style={styles.label}>Therapist</label>
+                            <select style={styles.input} value={selectedTherapist} onChange={(e) => setSelectedTherapist(e.target.value)}>
+                                {therapists.map((therapist) => <option key={therapist} value={therapist}>{therapist}</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style={styles.label}>Mode</label>
                             <select
                                 style={styles.input}
                                 value={viewMode}
@@ -350,111 +533,71 @@ export default function App() {
                         </div>
 
                         <div>
-                            <label style={styles.label}>Admin Access</label>
-                            {isAdmin ? (
-                                <button style={styles.dangerButton} onClick={logoutAdmin}>Logout Admin</button>
-                            ) : (
-                                <div style={{ display: "flex", gap: 8 }}>
-                                    <input
-                                        style={styles.input}
-                                        type="password"
-                                        placeholder="Admin password"
-                                        value={adminPassword}
-                                        onChange={(e) => setAdminPassword(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && loginAdmin()}
-                                    />
-                                    <button style={styles.primaryButton} onClick={loginAdmin}>Login</button>
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label style={styles.label}>Schedule Date</label>
-                            <input style={styles.input} type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
-                        </div>
-
-                        <div>
-                            <label style={styles.label}>Therapist</label>
-                            <select style={styles.input} value={selectedTherapist} onChange={(e) => setSelectedTherapist(e.target.value)}>
-                                {therapists.map((therapist) => <option key={therapist} value={therapist}>{therapist}</option>)}
+                            <label style={styles.label}>View</label>
+                            <select style={styles.input} value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)}>
+                                <option value="all">All Rooms</option>
+                                {rooms.map((room) => <option key={room} value={room}>{room}</option>)}
                             </select>
                         </div>
 
-                        {isAdmin && viewMode === "admin" && (
-                            <>
-                                <div>
-                                    <label style={styles.label}>Add / Remove Therapist</label>
-                                    <div style={{ display: "flex", gap: 8 }}>
-                                        <input style={styles.input} placeholder="Enter therapist name" value={newTherapist} onChange={(e) => setNewTherapist(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTherapist()} />
-                                        <button style={styles.primaryButton} onClick={addTherapist}>Add</button>
-                                    </div>
-                                    <button style={{ ...styles.dangerButton, marginTop: 8 }} onClick={removeTherapist}>Remove Selected Therapist</button>
-                                </div>
-
-                                <div>
-                                    <label style={styles.label}>Add Room</label>
-                                    <div style={{ display: "flex", gap: 8 }}>
-                                        <input style={styles.input} placeholder="Example: Play Room" value={newRoom} onChange={(e) => setNewRoom(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addRoom()} />
-                                        <button style={styles.primaryButton} onClick={addRoom}>Add</button>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label style={styles.label}>Clear Schedule</label>
-                                    <button style={styles.dangerButton} onClick={clearDay}>Clear Date</button>
-                                </div>
-                            </>
-                        )}
+                        <div>
+                            <label style={styles.label}>Booked Slots</label>
+                            <div style={{ ...styles.input, fontWeight: 900, color: "#4b136c", background: "#fbfaff" }}>{bookedCount} / {totalSlots}</div>
+                        </div>
                     </div>
-                </div>
 
-                {message && <div style={styles.card}>{message}</div>}
+                    {isAdmin && viewMode === "admin" && (
+                        <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap", justifyContent: "center" }}>
+                            <button style={styles.primaryButton} onClick={() => setMessage("Select a therapist, then click a plus sign in the schedule grid.")}>＋ Assign Room</button>
+                            <button style={styles.dangerButton} onClick={clearDay}>🗑 Clear All Rooms</button>
+                        </div>
+                    )}
+                </section>
+
+                {message && <section style={{ ...styles.card, ...styles.message }}>{message}</section>}
 
                 {viewMode === "therapist" && (
-                    <div style={styles.card}>
-                        <h2 style={{ marginTop: 0 }}>{selectedTherapist}'s Assignments</h2>
+                    <section style={styles.card}>
+                        <h2 style={styles.sectionTitle}>{selectedTherapist}'s Assignments</h2>
                         {mySchedule.length === 0 ? (
-                            <p>No room assignments found for this therapist on this date.</p>
+                            <p style={{ margin: 0 }}>No room assignments found for this therapist on this date.</p>
                         ) : (
-                            <ul>
+                            <div style={styles.chipWrap}>
                                 {mySchedule.map((item) => (
-                                    <li key={item.key}><strong>{item.time}</strong> — {item.room}</li>
+                                    <div key={item.key} style={styles.chip}><strong>{item.time}</strong> — {item.room}</div>
                                 ))}
-                            </ul>
+                            </div>
                         )}
-                    </div>
+                    </section>
                 )}
 
-                <div style={styles.tableWrap}>
+                <section style={styles.tableWrap}>
                     <table style={styles.table}>
                         <thead>
                             <tr>
                                 <th style={styles.th}>Time</th>
-                                {rooms.map((room) => <th key={room} style={styles.th}>{room}</th>)}
+                                {visibleRooms.map((room) => <th key={room} style={styles.th}>{room}</th>)}
                             </tr>
                         </thead>
                         <tbody>
                             {TIME_SLOTS.map((time) => (
                                 <tr key={time}>
                                     <td style={styles.timeCell}>{time}</td>
-                                    {rooms.map((room) => {
+                                    {visibleRooms.map((room) => {
                                         const key = slotKey(room, time);
                                         const assigned = dateAssignments[key];
                                         return (
                                             <td key={key} style={styles.td}>
                                                 {assigned ? (
-                                                    <div style={styles.assignment}>
-                                                        <strong>{assigned}</strong>
-                                                        <div style={styles.small}>{room} • {time}</div>
-                                                        {isAdmin && viewMode === "admin" && (
-                                                            <button style={{ ...styles.button, marginTop: 8, padding: "6px 8px" }} onClick={() => clearSlot(room, time)}>Clear</button>
-                                                        )}
+                                                    <div style={{ ...styles.assignment, background: therapistColor(assigned) }} onClick={() => isAdmin && clearSlot(room, time)} title={isAdmin ? "Click to clear this slot" : "Assigned"}>
+                                                        <div>{assigned}</div>
+                                                        <div style={styles.assignmentSmall}>{room} • {time}</div>
                                                     </div>
                                                 ) : (
                                                     isAdmin && viewMode === "admin" ? (
-                                                        <button style={{ ...styles.button, width: "100%", minHeight: 56 }} onClick={() => assignRoom(room, time)}>Assign</button>
+                                                        <button style={styles.slotButton} onClick={() => assignRoom(room, time)} title="Assign selected therapist">+</button>
                                                     ) : (
-                                                        <div style={{ color: "#9ca3af", textAlign: "center", paddingTop: 18 }}>Open</div>
+                                                        <div style={{ ...styles.slotButton, cursor: "default", display: "flex", alignItems: "center", justifyContent: "center", color: "#c5b9d3" }}>+</div>
                                                     )
                                                 )}
                                             </td>
@@ -464,10 +607,48 @@ export default function App() {
                             ))}
                         </tbody>
                     </table>
-                </div>
+                </section>
 
-                <p style={styles.note}>Privacy note: Do not enter client names, diagnoses, or appointment details. Use therapist name, room, date, and time only unless you build this with HIPAA-compliant safeguards.</p>
-            </div>
+                {isAdmin && viewMode === "admin" && (
+                    <section style={styles.bottomGrid}>
+                        <div style={styles.card}>
+                            <h3 style={styles.sectionTitle}>ROOM MANAGEMENT</h3>
+                            <label style={styles.label}>Add New Room</label>
+                            <div style={{ display: "flex", gap: 8 }}>
+                                <input style={styles.input} placeholder="Enter room name, e.g., Room 12" value={newRoom} onChange={(e) => setNewRoom(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addRoom()} />
+                                <button style={styles.primaryButton} onClick={addRoom}>Add Room</button>
+                            </div>
+                        </div>
+
+                        <div style={styles.card}>
+                            <h3 style={styles.sectionTitle}>CURRENT ROOMS</h3>
+                            <div style={styles.chipWrap}>
+                                {rooms.map((room) => <span key={room} style={styles.chip}>{room}</span>)}
+                            </div>
+                        </div>
+
+                        <div style={styles.card}>
+                            <h3 style={styles.sectionTitle}>THERAPIST MANAGEMENT</h3>
+                            <label style={styles.label}>Add / Remove Therapist</label>
+                            <div style={{ display: "flex", gap: 8 }}>
+                                <input style={styles.input} placeholder="Enter therapist name" value={newTherapist} onChange={(e) => setNewTherapist(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTherapist()} />
+                                <button style={styles.primaryButton} onClick={addTherapist}>Add</button>
+                            </div>
+                            <button style={{ ...styles.dangerButton, marginTop: 10, width: "100%" }} onClick={removeTherapist}>Remove Selected Therapist</button>
+                        </div>
+                    </section>
+                )}
+
+                <section style={styles.card}>
+                    <h3 style={styles.sectionTitle}>How to use</h3>
+                    <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
+                        <li>Select a therapist, then click “+” to assign that therapist to a room.</li>
+                        <li>Click an assigned slot in Admin Mode to clear that assignment.</li>
+                        <li>Use “Clear All Rooms” to clear the entire day.</li>
+                        <li>Do not enter client names, diagnoses, notes, or PHI.</li>
+                    </ul>
+                </section>
+            </main>
         </div>
     );
 }
