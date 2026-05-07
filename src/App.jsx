@@ -65,7 +65,13 @@ export default function App() {
     const [selectedTherapist, setSelectedTherapist] = useState(DEFAULT_THERAPISTS[0]);
     const [assignments, setAssignments] = useState({});
     const [message, setMessage] = useState("Connecting to shared schedule...");
-    const [viewMode, setViewMode] = useState("admin");
+    const [viewMode, setViewMode] = useState("therapist");
+    const [adminPassword, setAdminPassword] = useState("");
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    // Simple temporary password. Change this to whatever you want.
+    // For stronger security later, use Firebase Authentication instead.
+    const ADMIN_PASSWORD = "shieldbearer123";
 
     const dateAssignments = assignments[selectedDate] || {};
     const bookedCount = useMemo(() => Object.keys(dateAssignments).length, [dateAssignments]);
@@ -126,7 +132,7 @@ export default function App() {
     }
 
     async function assignRoom(room, time) {
-        if (viewMode !== "admin") {
+        if (!isAdmin) {
             setMessage("Switch to Admin View to edit the schedule.");
             return;
         }
@@ -154,7 +160,7 @@ export default function App() {
     }
 
     async function clearSlot(room, time) {
-        if (viewMode !== "admin") {
+        if (!isAdmin) {
             setMessage("Switch to Admin View to edit the schedule.");
             return;
         }
@@ -175,7 +181,7 @@ export default function App() {
     }
 
     async function removeTherapist() {
-        if (viewMode !== "admin") {
+        if (!isAdmin) {
             setMessage("Switch to Admin View to remove therapists.");
             return;
         }
@@ -199,7 +205,7 @@ export default function App() {
     }
 
     async function clearDay() {
-        if (viewMode !== "admin") {
+        if (!isAdmin) {
             setMessage("Switch to Admin View to edit the schedule.");
             return;
         }
@@ -208,6 +214,23 @@ export default function App() {
         const deletes = snapshot.docs.map((document) => deleteDoc(document.ref));
         await Promise.all(deletes);
         setMessage("All room assignments for this date have been cleared.");
+    }
+
+    function loginAdmin() {
+        if (adminPassword === ADMIN_PASSWORD) {
+            setIsAdmin(true);
+            setViewMode("admin");
+            setAdminPassword("");
+            setMessage("Admin editing enabled.");
+        } else {
+            setMessage("Incorrect admin password.");
+        }
+    }
+
+    function logoutAdmin() {
+        setIsAdmin(false);
+        setViewMode("therapist");
+        setMessage("Admin editing disabled. You are now in therapist view.");
     }
 
     function therapistSchedule() {
@@ -263,10 +286,39 @@ export default function App() {
                     <div style={styles.controls}>
                         <div>
                             <label style={styles.label}>View Mode</label>
-                            <select style={styles.input} value={viewMode} onChange={(e) => setViewMode(e.target.value)}>
-                                <option value="admin">Admin View</option>
+                            <select
+                                style={styles.input}
+                                value={viewMode}
+                                onChange={(e) => {
+                                    if (e.target.value === "admin" && !isAdmin) {
+                                        setMessage("Enter the admin password to edit the schedule.");
+                                        return;
+                                    }
+                                    setViewMode(e.target.value);
+                                }}
+                            >
+                                {isAdmin && <option value="admin">Admin View</option>}
                                 <option value="therapist">Therapist View</option>
                             </select>
+                        </div>
+
+                        <div>
+                            <label style={styles.label}>Admin Access</label>
+                            {isAdmin ? (
+                                <button style={styles.dangerButton} onClick={logoutAdmin}>Logout Admin</button>
+                            ) : (
+                                <div style={{ display: "flex", gap: 8 }}>
+                                    <input
+                                        style={styles.input}
+                                        type="password"
+                                        placeholder="Admin password"
+                                        value={adminPassword}
+                                        onChange={(e) => setAdminPassword(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && loginAdmin()}
+                                    />
+                                    <button style={styles.primaryButton} onClick={loginAdmin}>Login</button>
+                                </div>
+                            )}
                         </div>
 
                         <div>
@@ -281,7 +333,7 @@ export default function App() {
                             </select>
                         </div>
 
-                        {viewMode === "admin" && (
+                        {isAdmin && viewMode === "admin" && (
                             <>
                                 <div>
                                     <label style={styles.label}>Add / Remove Therapist</label>
@@ -339,12 +391,12 @@ export default function App() {
                                                     <div style={styles.assignment}>
                                                         <strong>{assigned}</strong>
                                                         <div style={styles.small}>{room} • {time}</div>
-                                                        {viewMode === "admin" && (
+                                                        {isAdmin && viewMode === "admin" && (
                                                             <button style={{ ...styles.button, marginTop: 8, padding: "6px 8px" }} onClick={() => clearSlot(room, time)}>Clear</button>
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    viewMode === "admin" ? (
+                                                    isAdmin && viewMode === "admin" ? (
                                                         <button style={{ ...styles.button, width: "100%", minHeight: 56 }} onClick={() => assignRoom(room, time)}>Assign</button>
                                                     ) : (
                                                         <div style={{ color: "#9ca3af", textAlign: "center", paddingTop: 18 }}>Open</div>
