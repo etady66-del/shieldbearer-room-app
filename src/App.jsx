@@ -176,7 +176,7 @@ export default function App() {
                                                 {assigned ? (
                                                     <div style={styles.assignment}>
                                                         <strong>{assigned}</strong>
-                                                        <div style={styles.small}>{room} • {time}</div>
+                                                        <div style={styles.small}>{room} Â• {time}</div>
                                                         <button style={{ ...styles.button, marginTop: 8, padding: "6px 8px" }} onClick={() => clearSlot(room, time)}>Clear</button>
                                                     </div>
                                                 ) : (
