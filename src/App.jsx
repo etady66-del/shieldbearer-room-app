@@ -30,7 +30,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const ROOMS = Array.from({ length: 10 }, (_, i) => `Room ${i + 1}`);
+const DEFAULT_ROOMS = ["Art Room", ...Array.from({ length: 11 }, (_, i) => `Room ${i + 1}`)];
 
 const TIME_SLOTS = [
     "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM",
@@ -60,6 +60,8 @@ function makeSafeId(text) {
 
 export default function App() {
     const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [rooms, setRooms] = useState(DEFAULT_ROOMS);
+    const [newRoom, setNewRoom] = useState("");
     const [therapists, setTherapists] = useState(DEFAULT_THERAPISTS);
     const [newTherapist, setNewTherapist] = useState("");
     const [selectedTherapist, setSelectedTherapist] = useState(DEFAULT_THERAPISTS[0]);
@@ -75,7 +77,7 @@ export default function App() {
 
     const dateAssignments = assignments[selectedDate] || {};
     const bookedCount = useMemo(() => Object.keys(dateAssignments).length, [dateAssignments]);
-    const totalSlots = ROOMS.length * TIME_SLOTS.length;
+    const totalSlots = rooms.length * TIME_SLOTS.length;
 
     useEffect(() => {
         const assignmentsRef = collection(db, "roomAssignments", selectedDate, "slots");
@@ -99,6 +101,28 @@ export default function App() {
 
         return () => unsubscribe();
     }, [selectedDate]);
+
+    useEffect(() => {
+        const roomsRef = collection(db, "rooms");
+
+        const unsubscribe = onSnapshot(roomsRef, async (snapshot) => {
+            if (snapshot.empty) {
+                await Promise.all(
+                    DEFAULT_ROOMS.map((room, index) =>
+                        setDoc(doc(db, "rooms", makeSafeId(room)), { name: room, order: index })
+                    )
+                );
+                return;
+            }
+
+            const liveRooms = [];
+            snapshot.forEach((document) => liveRooms.push(document.data()));
+            liveRooms.sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.name.localeCompare(b.name));
+            setRooms(liveRooms.map((room) => room.name));
+        });
+
+        return () => unsubscribe();
+    }, []);
 
     useEffect(() => {
         const therapistsRef = collection(db, "therapists");
@@ -180,6 +204,29 @@ export default function App() {
         setMessage(`${name} added to the shared therapist list.`);
     }
 
+    async function addRoom() {
+        if (!isAdmin) {
+            setMessage("Switch to Admin View to add rooms.");
+            return;
+        }
+
+        const roomName = newRoom.trim();
+        if (!roomName) return;
+
+        if (rooms.includes(roomName)) {
+            setMessage("That room is already in the list.");
+            return;
+        }
+
+        await setDoc(doc(db, "rooms", makeSafeId(roomName)), {
+            name: roomName,
+            order: rooms.length,
+        });
+
+        setNewRoom("");
+        setMessage(`${roomName} added to the room list.`);
+    }
+
     async function removeTherapist() {
         if (!isAdmin) {
             setMessage("Switch to Admin View to remove therapists.");
@@ -236,7 +283,7 @@ export default function App() {
     function therapistSchedule() {
         return Object.entries(dateAssignments)
             .map(([key, therapist]) => {
-                const room = ROOMS.find((r) => key.startsWith(makeSafeId(r)));
+                const room = rooms.find((r) => key.startsWith(makeSafeId(r)));
                 const time = TIME_SLOTS.find((t) => key.endsWith(makeSafeId(t)));
                 return { key, therapist, room, time };
             })
@@ -275,7 +322,7 @@ export default function App() {
                 <div style={styles.header}>
                     <div>
                         <h1 style={styles.title}>Shieldbearer Counseling Room Allocator</h1>
-                        <p style={styles.subtitle}>Shared online schedule for 10 rooms, one-hour sessions, 8:00 AM to 8:00 PM.</p>
+                        <p style={styles.subtitle}>Shared online schedule for Art Room plus Rooms 1–11, one-hour sessions, 8:00 AM to 8:00 PM.</p>
                     </div>
                     <div style={styles.card}>
                         <strong>Booked Slots:</strong> {bookedCount} / {totalSlots}
@@ -345,6 +392,14 @@ export default function App() {
                                 </div>
 
                                 <div>
+                                    <label style={styles.label}>Add Room</label>
+                                    <div style={{ display: "flex", gap: 8 }}>
+                                        <input style={styles.input} placeholder="Example: Play Room" value={newRoom} onChange={(e) => setNewRoom(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addRoom()} />
+                                        <button style={styles.primaryButton} onClick={addRoom}>Add</button>
+                                    </div>
+                                </div>
+
+                                <div>
                                     <label style={styles.label}>Clear Schedule</label>
                                     <button style={styles.dangerButton} onClick={clearDay}>Clear Date</button>
                                 </div>
@@ -375,14 +430,14 @@ export default function App() {
                         <thead>
                             <tr>
                                 <th style={styles.th}>Time</th>
-                                {ROOMS.map((room) => <th key={room} style={styles.th}>{room}</th>)}
+                                {rooms.map((room) => <th key={room} style={styles.th}>{room}</th>)}
                             </tr>
                         </thead>
                         <tbody>
                             {TIME_SLOTS.map((time) => (
                                 <tr key={time}>
                                     <td style={styles.timeCell}>{time}</td>
-                                    {ROOMS.map((room) => {
+                                    {rooms.map((room) => {
                                         const key = slotKey(room, time);
                                         const assigned = dateAssignments[key];
                                         return (
