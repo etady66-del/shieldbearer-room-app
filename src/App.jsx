@@ -53,7 +53,15 @@ const DEFAULT_THERAPISTS = [
     "Mary Nkaginieme",
     "Vanessa Hall",
     "Lauren Hwang",
-    "Katelynn Lincoln"
+    "Katelynn Lincoln",
+    "Patrick Marziale",
+    "Shimere Torres",
+    "Danielle Belvin",
+    "Ana Cano",
+    "Ginny Jones",
+    "Cinthia Marquez",
+    "Hanna Hassel",
+    "Hanna Sawyer"
 ];
 
 const COLORS = [
@@ -335,7 +343,7 @@ export default function App() {
             background: "#ffffff",
             border: "1px solid #e5dff0",
             borderRadius: 12,
-            padding: 14,
+            padding: 10,
             boxShadow: "0 8px 22px rgba(75, 19, 108, 0.08)",
         },
         adminStatus: { display: "flex", alignItems: "center", gap: 8, color: isAdmin ? "#15803d" : "#6b7280", fontWeight: 900 },
@@ -397,10 +405,11 @@ export default function App() {
             border: "1px solid #e7e0ef",
             boxShadow: "0 8px 22px rgba(75, 19, 108, 0.07)",
         },
-        table: { width: "100%", minWidth: 1250, borderCollapse: "separate", borderSpacing: 0 },
+        table: { width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 },
         th: {
+            fontSize: 13,
             background: "#fbfaff",
-            padding: "16px 10px",
+            padding: "12px 6px",
             textAlign: "center",
             borderBottom: "1px solid #e7e0ef",
             borderRight: "1px solid #f1edf7",
@@ -409,6 +418,7 @@ export default function App() {
             whiteSpace: "nowrap",
         },
         timeCell: {
+            fontSize: 12,
             padding: 14,
             borderBottom: "1px solid #f1edf7",
             borderRight: "1px solid #f1edf7",
@@ -419,6 +429,7 @@ export default function App() {
             whiteSpace: "nowrap",
         },
         td: {
+            width: 88,
             padding: 6,
             borderBottom: "1px solid #f1edf7",
             borderRight: "1px solid #f1edf7",
@@ -426,6 +437,7 @@ export default function App() {
             background: "#ffffff",
         },
         slotButton: {
+            fontSize: 18,
             width: "100%",
             minHeight: 44,
             borderRadius: 8,
@@ -436,6 +448,7 @@ export default function App() {
             cursor: "pointer",
         },
         assignment: {
+            fontSize: 12,
             minHeight: 44,
             borderRadius: 8,
             padding: "8px 10px",
@@ -448,7 +461,7 @@ export default function App() {
             fontWeight: 900,
             boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.45)",
         },
-        assignmentSmall: { fontSize: 11, color: "#4b5563", marginTop: 2, fontWeight: 700 },
+        assignmentSmall: { fontSize: 9, color: "#4b5563", marginTop: 2, fontWeight: 700 },
         bottomGrid: { display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: 18, marginTop: 18 },
         sectionTitle: { color: "#4b136c", fontWeight: 900, margin: "0 0 14px 0", fontSize: 16 },
         chipWrap: { display: "flex", gap: 8, flexWrap: "wrap" },
