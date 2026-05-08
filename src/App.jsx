@@ -61,7 +61,8 @@ const DEFAULT_THERAPISTS = [
     "Ginny Jones",
     "Cinthia Marquez",
     "Hanna Hassel",
-    "Hanna Sawyer"
+    "Hanna Sawyer",
+    "Eric Tadros"
 ];
 
 const COLORS = [
@@ -155,17 +156,36 @@ export default function App() {
 
     useEffect(() => {
         const therapistsRef = collection(db, "therapists");
+        const removedTherapistsRef = collection(db, "removedTherapists");
 
-        const unsubscribe = onSnapshot(therapistsRef, (snapshot) => {
-            const names = [];
-            snapshot.forEach((document) => names.push(document.data().name));
+        let activeNames = [];
+        let removedNames = [];
 
-            const merged = Array.from(new Set([...DEFAULT_THERAPISTS, ...names])).sort();
+        function updateTherapistList() {
+            const merged = Array.from(new Set([...DEFAULT_THERAPISTS, ...activeNames]))
+                .filter((name) => !removedNames.includes(name))
+                .sort();
+
             setTherapists(merged);
             if (!merged.includes(selectedTherapist)) setSelectedTherapist(merged[0] || "");
+        }
+
+        const unsubscribeTherapists = onSnapshot(therapistsRef, (snapshot) => {
+            activeNames = [];
+            snapshot.forEach((document) => activeNames.push(document.data().name));
+            updateTherapistList();
         });
 
-        return () => unsubscribe();
+        const unsubscribeRemoved = onSnapshot(removedTherapistsRef, (snapshot) => {
+            removedNames = [];
+            snapshot.forEach((document) => removedNames.push(document.data().name));
+            updateTherapistList();
+        });
+
+        return () => {
+            unsubscribeTherapists();
+            unsubscribeRemoved();
+        };
     }, [selectedTherapist]);
 
     function slotKey(room, time) {
@@ -245,10 +265,12 @@ export default function App() {
 
         if (!confirmed) return;
 
-        await deleteDoc(doc(db, "therapists", makeSafeId(selectedTherapist)));
-
-        const remainingTherapists = therapists.filter((name) => name !== selectedTherapist);
         const removedName = selectedTherapist;
+
+        await deleteDoc(doc(db, "therapists", makeSafeId(removedName)));
+        await setDoc(doc(db, "removedTherapists", makeSafeId(removedName)), { name: removedName });
+
+        const remainingTherapists = therapists.filter((name) => name !== removedName);
         setSelectedTherapist(remainingTherapists[0] || "");
         setMessage(`${removedName} removed from the shared therapist list.`);
     }
@@ -274,6 +296,28 @@ export default function App() {
 
         setNewRoom("");
         setMessage(`${roomName} added to the room list.`);
+    }
+
+    async function removeRoom() {
+        if (!isAdmin) {
+            setMessage("Enter the admin password to remove rooms.");
+            return;
+        }
+
+        if (!roomFilter || roomFilter === "all") {
+            setMessage("Select a specific room in the View dropdown before removing a room.");
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Remove ${roomFilter}? Existing assignments for this room will not be deleted automatically.`
+        );
+
+        if (!confirmed) return;
+
+        await deleteDoc(doc(db, "rooms", makeSafeId(roomFilter)));
+        setRoomFilter("all");
+        setMessage(`${roomFilter} removed from the room list.`);
     }
 
     async function clearDay() {
@@ -631,6 +675,8 @@ export default function App() {
                                 <input style={styles.input} placeholder="Enter room name, e.g., Room 12" value={newRoom} onChange={(e) => setNewRoom(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addRoom()} />
                                 <button style={styles.primaryButton} onClick={addRoom}>Add Room</button>
                             </div>
+                            <button style={{ ...styles.dangerButton, marginTop: 10, width: "100%" }} onClick={removeRoom}>Remove Selected Room</button>
+                            <div style={{ ...styles.assignmentSmall, marginTop: 8 }}>To remove a room, first select it from the View dropdown above.</div>
                         </div>
 
                         <div style={styles.card}>
