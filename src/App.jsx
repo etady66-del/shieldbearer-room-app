@@ -156,36 +156,28 @@ export default function App() {
 
     useEffect(() => {
         const therapistsRef = collection(db, "therapists");
-        const removedTherapistsRef = collection(db, "removedTherapists");
 
-        let activeNames = [];
-        let removedNames = [];
+        const unsubscribe = onSnapshot(therapistsRef, async (snapshot) => {
+            // Firebase is now the single source of truth for therapists.
+            // If the therapist list is empty, seed it once with the defaults.
+            if (snapshot.empty) {
+                await Promise.all(
+                    DEFAULT_THERAPISTS.map((name) =>
+                        setDoc(doc(db, "therapists", makeSafeId(name)), { name })
+                    )
+                );
+                return;
+            }
 
-        function updateTherapistList() {
-            const merged = Array.from(new Set([...DEFAULT_THERAPISTS, ...activeNames]))
-                .filter((name) => !removedNames.includes(name))
-                .sort();
+            const names = [];
+            snapshot.forEach((document) => names.push(document.data().name));
+            names.sort();
 
-            setTherapists(merged);
-            if (!merged.includes(selectedTherapist)) setSelectedTherapist(merged[0] || "");
-        }
-
-        const unsubscribeTherapists = onSnapshot(therapistsRef, (snapshot) => {
-            activeNames = [];
-            snapshot.forEach((document) => activeNames.push(document.data().name));
-            updateTherapistList();
+            setTherapists(names);
+            if (!names.includes(selectedTherapist)) setSelectedTherapist(names[0] || "");
         });
 
-        const unsubscribeRemoved = onSnapshot(removedTherapistsRef, (snapshot) => {
-            removedNames = [];
-            snapshot.forEach((document) => removedNames.push(document.data().name));
-            updateTherapistList();
-        });
-
-        return () => {
-            unsubscribeTherapists();
-            unsubscribeRemoved();
-        };
+        return () => unsubscribe();
     }, [selectedTherapist]);
 
     function slotKey(room, time) {
@@ -266,12 +258,8 @@ export default function App() {
         if (!confirmed) return;
 
         const removedName = selectedTherapist;
-
         await deleteDoc(doc(db, "therapists", makeSafeId(removedName)));
-        await setDoc(doc(db, "removedTherapists", makeSafeId(removedName)), { name: removedName });
 
-        const remainingTherapists = therapists.filter((name) => name !== removedName);
-        setSelectedTherapist(remainingTherapists[0] || "");
         setMessage(`${removedName} removed from the shared therapist list.`);
     }
 
