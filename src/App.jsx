@@ -20,17 +20,14 @@ import {
   Replace the firebaseConfig below with your own Firebase web app config.
 */
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyBsDcsllw96FB12bmNU33JYQ40ZruO38oI",
-    authDomain: "shieldbearer-room-scheduler.firebaseapp.com",
-    projectId: "shieldbearer-room-scheduler",
-    storageBucket: "shieldbearer-room-scheduler.firebasestorage.app",
-    messagingSenderId: "872657439367",
-    appId: "1:872657439367:web:a00cecd0cb6fe1fd0fc622"
+    apiKey: "PASTE_YOUR_API_KEY_HERE",
+    authDomain: "PASTE_YOUR_AUTH_DOMAIN_HERE",
+    projectId: "PASTE_YOUR_PROJECT_ID_HERE",
+    storageBucket: "PASTE_YOUR_STORAGE_BUCKET_HERE",
+    messagingSenderId: "PASTE_YOUR_MESSAGING_SENDER_ID_HERE",
+    appId: "PASTE_YOUR_APP_ID_HERE",
 };
-
-// Initialize Firebase
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -90,7 +87,9 @@ function therapistColor(name) {
 }
 
 export default function App() {
-    const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [selectedDate, setSelectedDate] = useState(() => {
+        return localStorage.getItem("shieldbearerSelectedDate") || new Date().toISOString().slice(0, 10);
+    });
     const [rooms, setRooms] = useState(DEFAULT_ROOMS);
     const [newRoom, setNewRoom] = useState("");
     const [therapists, setTherapists] = useState(DEFAULT_THERAPISTS);
@@ -111,6 +110,10 @@ export default function App() {
     const visibleRooms = roomFilter === "all" ? rooms : rooms.filter((room) => room === roomFilter);
     const bookedCount = useMemo(() => Object.keys(dateAssignments).length, [dateAssignments]);
     const totalSlots = rooms.length * TIME_SLOTS.length;
+
+    useEffect(() => {
+        localStorage.setItem("shieldbearerSelectedDate", selectedDate);
+    }, [selectedDate]);
 
     useEffect(() => {
         const assignmentsRef = collection(db, "roomAssignments", selectedDate, "slots");
@@ -211,15 +214,21 @@ export default function App() {
         }
 
         const key = slotKey(room, time);
-        await setDoc(doc(db, "roomAssignments", selectedDate, "slots", key), {
-            therapist: selectedTherapist,
-            room,
-            time,
-            date: selectedDate,
-            updatedAt: new Date().toISOString(),
-        });
 
-        setMessage(`${selectedTherapist} assigned to ${room} at ${time}.`);
+        try {
+            await setDoc(doc(db, "roomAssignments", selectedDate, "slots", key), {
+                therapist: selectedTherapist,
+                room,
+                time,
+                date: selectedDate,
+                updatedAt: new Date().toISOString(),
+            });
+
+            setMessage(`${selectedTherapist} assigned to ${room} at ${time} and saved to Firebase.`);
+        } catch (error) {
+            console.error("Firebase save error:", error);
+            setMessage(`Save failed: ${error.message}`);
+        }
     }
 
     async function clearSlot(room, time) {
@@ -229,8 +238,14 @@ export default function App() {
         }
 
         const key = slotKey(room, time);
-        await deleteDoc(doc(db, "roomAssignments", selectedDate, "slots", key));
-        setMessage(`${room} at ${time} is now open.`);
+
+        try {
+            await deleteDoc(doc(db, "roomAssignments", selectedDate, "slots", key));
+            setMessage(`${room} at ${time} is now open and saved to Firebase.`);
+        } catch (error) {
+            console.error("Firebase delete error:", error);
+            setMessage(`Delete failed: ${error.message}`);
+        }
     }
 
     async function addTherapist() {
@@ -639,7 +654,6 @@ export default function App() {
                                                 {assigned ? (
                                                     <div style={{ ...styles.assignment, background: therapistColor(assigned) }} onClick={() => isAdmin && clearSlot(room, time)} title={isAdmin ? "Click to clear this slot" : "Assigned"}>
                                                         <div>{assigned}</div>
-                                                        <div style={styles.assignmentSmall}>{room} • {time}</div>
                                                     </div>
                                                 ) : (
                                                     isAdmin && viewMode === "admin" ? (
