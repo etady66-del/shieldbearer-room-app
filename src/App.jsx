@@ -32,7 +32,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const DEFAULT_ROOMS = ["Art Room", ...Array.from({ length: 11 }, (_, i) => `${i + 1}`)];
+const DEFAULT_ROOMS = ["Art Room", ...Array.from({ length: 11 }, (_, i) => `Room ${i + 1}`)];
 
 const TIME_SLOTS = [
     "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM",
