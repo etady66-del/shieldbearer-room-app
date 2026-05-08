@@ -20,14 +20,17 @@ import {
   Replace the firebaseConfig below with your own Firebase web app config.
 */
 
+// Your web app's Firebase configuration
 const firebaseConfig = {
-    apiKey: "PASTE_YOUR_API_KEY_HERE",
-    authDomain: "PASTE_YOUR_AUTH_DOMAIN_HERE",
-    projectId: "PASTE_YOUR_PROJECT_ID_HERE",
-    storageBucket: "PASTE_YOUR_STORAGE_BUCKET_HERE",
-    messagingSenderId: "PASTE_YOUR_MESSAGING_SENDER_ID_HERE",
-    appId: "PASTE_YOUR_APP_ID_HERE",
+    apiKey: "AIzaSyBsDcsllw96FB12bmNU33JYQ40ZruO38oI",
+    authDomain: "shieldbearer-room-scheduler.firebaseapp.com",
+    projectId: "shieldbearer-room-scheduler",
+    storageBucket: "shieldbearer-room-scheduler.firebasestorage.app",
+    messagingSenderId: "872657439367",
+    appId: "1:872657439367:web:a00cecd0cb6fe1fd0fc622"
 };
+
+// Initialize Firebase
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
