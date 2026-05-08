@@ -20,6 +20,8 @@ import {
   Replace the firebaseConfig below with your own Firebase web app config.
 */
 
+
+// Your web app's Firebase configuration
 // Your web app's Firebase configuration
 const firebaseConfig = {
     apiKey: "AIzaSyBsDcsllw96FB12bmNU33JYQ40ZruO38oI",
