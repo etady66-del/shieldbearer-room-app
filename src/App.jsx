@@ -120,17 +120,46 @@ export default function App() {
 
     useEffect(() => {
         const assignmentsRef = collection(db, "roomAssignments", selectedDate, "slots");
+        const weekday = getWeekdayKey(selectedDate);
+        const templateRef = collection(db, "weeklyTemplates", weekday, "slots");
 
         const unsubscribe = onSnapshot(
             assignmentsRef,
-            (snapshot) => {
+            async (snapshot) => {
                 const liveAssignments = {};
+
                 snapshot.forEach((document) => {
                     const data = document.data();
                     liveAssignments[document.id] = data.therapist;
                 });
+
+                // If no assignments exist for this date yet,
+                // automatically load the weekday template.
+                if (snapshot.empty) {
+                    const templateSnapshot = await getDocs(templateRef);
+
+                    if (!templateSnapshot.empty) {
+                        const writes = [];
+
+                        templateSnapshot.forEach((documentSnapshot) => {
+                            const data = documentSnapshot.data();
+                            liveAssignments[documentSnapshot.id] = data.therapist;
+
+                            writes.push(
+                                setDoc(doc(db, "roomAssignments", selectedDate, "slots", documentSnapshot.id), {
+                                    ...data,
+                                    date: selectedDate,
+                                    copiedFromTemplate: true,
+                                })
+                            );
+                        });
+
+                        await Promise.all(writes);
+                    }
+                }
+
                 setAssignments((prev) => ({ ...prev, [selectedDate]: liveAssignments }));
-                setMessage("Shared schedule loaded. Updates appear automatically.");
+                setMessage("Shared schedule loaded. Weekly templates sync automatically.");
             },
             (error) => {
                 console.error(error);
@@ -200,6 +229,11 @@ export default function App() {
         });
     }
 
+    function getWeekdayKey(dateString) {
+        const date = new Date(`${dateString}T12:00:00`);
+        return date.toLocaleDateString("en-US", { weekday: "long" });
+    }
+
     async function assignRoom(room, time) {
         if (!isAdmin) {
             setMessage("Enter the admin password to edit the schedule.");
@@ -217,17 +251,29 @@ export default function App() {
         }
 
         const key = slotKey(room, time);
+        const weekday = getWeekdayKey(selectedDate);
 
         try {
+            // Save to the specific date
             await setDoc(doc(db, "roomAssignments", selectedDate, "slots", key), {
                 therapist: selectedTherapist,
                 room,
                 time,
                 date: selectedDate,
+                recurringWeekday: weekday,
                 updatedAt: new Date().toISOString(),
             });
 
-            setMessage(`${selectedTherapist} assigned to ${room} at ${time} and saved to Firebase.`);
+            // Save recurring weekly template
+            await setDoc(doc(db, "weeklyTemplates", weekday, "slots", key), {
+                therapist: selectedTherapist,
+                room,
+                time,
+                weekday,
+                updatedAt: new Date().toISOString(),
+            });
+
+            setMessage(`${selectedTherapist} assigned to ${room} at ${time}. Changes will repeat every ${weekday}.`);
         } catch (error) {
             console.error("Firebase save error:", error);
             setMessage(`Save failed: ${error.message}`);
@@ -329,6 +375,12 @@ export default function App() {
         setMessage(`${roomFilter} removed from the room list.`);
     }
 
+    function addDays(dateString, daysToAdd) {
+        const date = new Date(`${dateString}T12:00:00`);
+        date.setDate(date.getDate() + daysToAdd);
+        return date.toISOString().slice(0, 10);
+    }
+
     async function clearDay() {
         if (!isAdmin) {
             setMessage("Enter the admin password to edit the schedule.");
@@ -342,6 +394,70 @@ export default function App() {
         const deletes = snapshot.docs.map((document) => deleteDoc(document.ref));
         await Promise.all(deletes);
         setMessage("All room assignments for this date have been cleared.");
+    }
+
+    async function copySelectedDayToMatchingWeekdays() {
+        if (!isAdmin) {
+            setMessage("Enter the admin password to copy schedules.");
+            return;
+        }
+
+        const currentSchedule = assignments[selectedDate] || {};
+        const entries = Object.entries(currentSchedule);
+
+        if (entries.length === 0) {
+            setMessage("There are no assignments on this date to copy.");
+            return;
+        }
+
+        const weekday = getWeekdayKey(selectedDate);
+        const confirmed = window.confirm(
+            `Copy this ${weekday} schedule to every ${weekday} for the next 52 weeks?`
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const writes = [];
+
+            for (const [key, therapist] of entries) {
+                const room = rooms.find((r) => key.startsWith(makeSafeId(r))) || "";
+                const time = TIME_SLOTS.find((t) => key.endsWith(makeSafeId(t))) || "";
+
+                // Save/update the weekly template
+                writes.push(
+                    setDoc(doc(db, "weeklyTemplates", weekday, "slots", key), {
+                        therapist,
+                        room,
+                        time,
+                        weekday,
+                        updatedAt: new Date().toISOString(),
+                    })
+                );
+
+                // Copy to this date and the next 52 matching weekdays
+                for (let week = 0; week <= 52; week++) {
+                    const targetDate = addDays(selectedDate, week * 7);
+                    writes.push(
+                        setDoc(doc(db, "roomAssignments", targetDate, "slots", key), {
+                            therapist,
+                            room,
+                            time,
+                            date: targetDate,
+                            recurringWeekday: weekday,
+                            copiedFrom: selectedDate,
+                            updatedAt: new Date().toISOString(),
+                        })
+                    );
+                }
+            }
+
+            await Promise.all(writes);
+            setMessage(`Copied this schedule to every ${weekday} for the next 52 weeks.`);
+        } catch (error) {
+            console.error("Copy schedule error:", error);
+            setMessage(`Copy failed: ${error.message}`);
+        }
     }
 
     function loginAdmin() {
@@ -615,6 +731,7 @@ export default function App() {
                     {isAdmin && viewMode === "admin" && (
                         <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap", justifyContent: "center" }}>
                             <button style={styles.primaryButton} onClick={() => setMessage("Select a therapist, then click a plus sign in the schedule grid.")}>＋ Assign Room</button>
+                            <button style={styles.primaryButton} onClick={copySelectedDayToMatchingWeekdays}>↻ Copy to Every Same Weekday</button>
                             <button style={styles.dangerButton} onClick={clearDay}>🗑 Clear All Rooms</button>
                         </div>
                     )}
